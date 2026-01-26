@@ -6,10 +6,16 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { createSite, updateSite, deleteSite } from '@/actions/sites'
-import type { SiteFormData, WorkSite } from '@/types'
+import type { SiteFormData } from '@/types'
 
 interface SiteFormProps {
-    site?: WorkSite
+    site?: {
+        id: string
+        name: string
+        address: string | null
+        description: string | null
+        isActive: boolean
+    }
 }
 
 export function SiteForm({ site }: SiteFormProps) {
