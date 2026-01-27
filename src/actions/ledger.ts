@@ -81,7 +81,7 @@ export async function getLaborLedger(
                 entries.push({
                     date: att.date,
                     description,
-                    type: 'salary',
+                    type: 'ATTENDANCE',
                     debit: 0,
                     credit: Math.round(credit),
                     balance: Math.round(runningBalance),

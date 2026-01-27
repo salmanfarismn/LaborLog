@@ -51,9 +51,6 @@ export async function getLaborById(id: string) {
     }
 }
 
-// Alias for backward compatibility
-export const getLabor = getLaborById
-
 // Create a new labor
 export async function createLabor(data: LaborFormData) {
     try {

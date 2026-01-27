@@ -62,6 +62,61 @@ export async function getLaborAttendance(laborId: string, startDate: string, end
     }
 }
 
+// Get monthly attendance summary for all labors
+export async function getMonthlyAttendanceSummary(year: number, month: number) {
+    try {
+        const startDate = new Date(year, month, 1)
+        const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999)
+
+        const attendances = await prisma.attendance.groupBy({
+            by: ['laborId', 'attendanceType'],
+            where: {
+                date: {
+                    gte: startDate,
+                    lte: endDate,
+                },
+            },
+            _count: true,
+        })
+
+        // Get all active labors
+        const labors = await prisma.labor.findMany({
+            where: { status: 'ACTIVE' },
+            select: { id: true, fullName: true, monthlySalary: true },
+        })
+
+        // Calculate summary for each labor
+        const summary = labors.map(labor => {
+            const laborAttendances = attendances.filter(a => a.laborId === labor.id)
+
+            const fullDays = laborAttendances.find(a => a.attendanceType === 'FULL_DAY')?._count || 0
+            const halfDays = laborAttendances.find(a => a.attendanceType === 'HALF_DAY')?._count || 0
+            const absents = laborAttendances.find(a => a.attendanceType === 'ABSENT')?._count || 0
+
+            const effectiveDays = fullDays + (halfDays * 0.5)
+            const dailyRate = labor.monthlySalary / 26 // Assuming 26 working days
+            const calculatedSalary = effectiveDays * dailyRate
+
+            return {
+                laborId: labor.id,
+                laborName: labor.fullName,
+                fullDays,
+                halfDays,
+                absents,
+                customHours: 0,
+                totalWorkDays: fullDays + halfDays,
+                monthlySalary: labor.monthlySalary,
+                calculatedSalary: Math.round(calculatedSalary),
+            }
+        })
+
+        return { success: true, data: summary }
+    } catch (error) {
+        console.error('Error fetching monthly summary:', error)
+        return { success: false, error: 'Failed to fetch summary' }
+    }
+}
+
 // Create or update attendance (upsert)
 export async function saveAttendance(data: AttendanceFormData) {
     try {
