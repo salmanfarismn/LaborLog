@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import type { SiteFormData } from '@/types'
+import type { WorkSiteFormData } from '@/types'
 
 // Get all work sites
 export async function getSites(activeOnly: boolean = false) {
@@ -50,8 +50,11 @@ export async function getSiteById(id: string) {
     }
 }
 
+// Alias for backward compatibility
+export const getSite = getSiteById
+
 // Create a new site
-export async function createSite(data: SiteFormData) {
+export async function createSite(data: WorkSiteFormData) {
     try {
         const site = await prisma.workSite.create({
             data: {
@@ -72,7 +75,7 @@ export async function createSite(data: SiteFormData) {
 }
 
 // Update an existing site
-export async function updateSite(id: string, data: SiteFormData) {
+export async function updateSite(id: string, data: WorkSiteFormData) {
     try {
         const site = await prisma.workSite.update({
             where: { id },

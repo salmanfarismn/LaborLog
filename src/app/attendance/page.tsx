@@ -4,117 +4,137 @@ import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
+import { getAttendanceByDate, saveAttendance } from '@/actions/attendance'
 import { getLabors } from '@/actions/labors'
 import { getSites } from '@/actions/sites'
-import { getAttendanceByDate, bulkSaveAttendance } from '@/actions/attendance'
-import { formatDateForInput } from '@/lib/utils'
-import { Calendar, Save, Users } from 'lucide-react'
-import type { AttendanceFormData, AttendanceType } from '@/types'
+import { getTodayString, formatDate } from '@/lib/utils'
+import { Calendar, CheckCircle, XCircle, Clock, Save, ChevronLeft, ChevronRight } from 'lucide-react'
+import type { Labor, WorkSite, AttendanceType } from '@/types'
 
-interface LaborWithAttendance {
-    id: string
-    fullName: string
-    role: string | null
-    defaultSiteId: string | null
+interface AttendanceEntry {
+    laborId: string
+    laborName: string
+    siteId?: string
     attendanceType: AttendanceType
-    siteId: string
-    notes: string
+    existing?: boolean
 }
 
 export default function AttendancePage() {
-    const [date, setDate] = useState(formatDateForInput(new Date()))
-    const [labors, setLabors] = useState<LaborWithAttendance[]>([])
-    const [sites, setSites] = useState<{ value: string; label: string }[]>([])
-    const [isLoading, setIsLoading] = useState(true)
-    const [isSaving, setIsSaving] = useState(false)
-    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+    const [date, setDate] = useState(getTodayString())
+    const [labors, setLabors] = useState<Labor[]>([])
+    const [sites, setSites] = useState<WorkSite[]>([])
+    const [attendance, setAttendance] = useState<Map<string, AttendanceEntry>>(new Map())
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
 
+    // Load labors and sites
     useEffect(() => {
-        loadData()
-    }, [date])
-
-    const loadData = async () => {
-        setIsLoading(true)
-        try {
-            const [laborsResult, sitesResult, attendanceResult] = await Promise.all([
-                getLabors('ACTIVE'),
-                getSites(true),
-                getAttendanceByDate(date),
+        async function loadData() {
+            const [laborsRes, sitesRes] = await Promise.all([
+                getLabors(),
+                getSites(),
             ])
+            if (laborsRes.success && laborsRes.data) {
+                setLabors(laborsRes.data.filter(l => l.status === 'ACTIVE'))
+            }
+            if (sitesRes.success && sitesRes.data) {
+                setSites(sitesRes.data.filter(s => s.isActive))
+            }
+        }
+        loadData()
+    }, [])
 
-            const laborList = laborsResult.data || []
-            const siteList = sitesResult.data || []
-            const attendanceList = attendanceResult.data || []
+    // Load attendance for selected date
+    useEffect(() => {
+        async function loadAttendance() {
+            setLoading(true)
+            const result = await getAttendanceByDate(date)
 
-            setSites(siteList.map(s => ({ value: s.id, label: s.name })))
+            const newAttendance = new Map<string, AttendanceEntry>()
 
-            // Map labors with their existing attendance
-            const laborsWithAttendance = laborList.map(labor => {
-                const existing = attendanceList.find(a => a.laborId === labor.id)
-                return {
-                    id: labor.id,
-                    fullName: labor.fullName,
-                    role: labor.role,
-                    defaultSiteId: labor.defaultSiteId,
-                    attendanceType: (existing?.attendanceType as AttendanceType) || 'FULL_DAY',
-                    siteId: existing?.siteId || labor.defaultSiteId || '',
-                    notes: existing?.notes || '',
-                }
+            // Initialize with all labors as unmarked
+            labors.forEach(labor => {
+                newAttendance.set(labor.id, {
+                    laborId: labor.id,
+                    laborName: labor.fullName,
+                    siteId: labor.defaultSiteId || undefined,
+                    attendanceType: 'FULL_DAY',
+                    existing: false,
+                })
             })
 
-            setLabors(laborsWithAttendance)
-        } catch (error) {
-            console.error('Error loading data:', error)
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
-    const updateLabor = (id: string, field: keyof LaborWithAttendance, value: string) => {
-        setLabors(prev => prev.map(l =>
-            l.id === id ? { ...l, [field]: value } : l
-        ))
-    }
-
-    const handleSave = async () => {
-        setIsSaving(true)
-        setMessage(null)
-
-        try {
-            const attendances: AttendanceFormData[] = labors.map(labor => ({
-                date,
-                laborId: labor.id,
-                siteId: labor.siteId || undefined,
-                attendanceType: labor.attendanceType,
-                notes: labor.notes || undefined,
-            }))
-
-            const result = await bulkSaveAttendance(attendances)
-
-            if (result.success) {
-                setMessage({ type: 'success', text: 'Attendance saved successfully!' })
-            } else {
-                setMessage({ type: 'error', text: result.error || 'Failed to save attendance' })
+            // Update with existing attendance
+            if (result.success && result.data) {
+                result.data.forEach((att: { laborId: string; siteId?: string | null; labor: { fullName: string }; attendanceType: string }) => {
+                    newAttendance.set(att.laborId, {
+                        laborId: att.laborId,
+                        laborName: att.labor.fullName,
+                        siteId: att.siteId || undefined,
+                        attendanceType: att.attendanceType as AttendanceType,
+                        existing: true,
+                    })
+                })
             }
-        } catch {
-            setMessage({ type: 'error', text: 'An unexpected error occurred' })
-        } finally {
-            setIsSaving(false)
+
+            setAttendance(newAttendance)
+            setLoading(false)
+        }
+
+        if (labors.length > 0) {
+            loadAttendance()
+        }
+    }, [date, labors])
+
+    const handleAttendanceChange = (laborId: string, type: AttendanceType) => {
+        const entry = attendance.get(laborId)
+        if (entry) {
+            setAttendance(new Map(attendance.set(laborId, { ...entry, attendanceType: type })))
         }
     }
 
-    const markAllAs = (type: AttendanceType) => {
-        setLabors(prev => prev.map(l => ({ ...l, attendanceType: type })))
+    const handleSiteChange = (laborId: string, siteId: string) => {
+        const entry = attendance.get(laborId)
+        if (entry) {
+            setAttendance(new Map(attendance.set(laborId, { ...entry, siteId })))
+        }
     }
 
-    const attendanceOptions = [
-        { value: 'FULL_DAY', label: 'Full Day' },
-        { value: 'HALF_DAY', label: 'Half Day' },
-        { value: 'ABSENT', label: 'Absent' },
-        { value: 'CUSTOM', label: 'Custom' },
+    const handleSaveAll = async () => {
+        setSaving(true)
+        for (const entry of attendance.values()) {
+            await saveAttendance({
+                date,
+                laborId: entry.laborId,
+                siteId: entry.siteId,
+                attendanceType: entry.attendanceType,
+            })
+        }
+        setSaving(false)
+
+        // Refresh attendance to show as saved
+        const result = await getAttendanceByDate(date)
+        if (result.success && result.data) {
+            const newAttendance = new Map<string, AttendanceEntry>()
+            attendance.forEach((entry, laborId) => {
+                newAttendance.set(laborId, { ...entry, existing: true })
+            })
+            setAttendance(newAttendance)
+        }
+    }
+
+    const changeDate = (days: number) => {
+        const current = new Date(date)
+        current.setDate(current.getDate() + days)
+        setDate(current.toISOString().split('T')[0])
+    }
+
+    const attendanceTypes: { value: AttendanceType; label: string; color: string }[] = [
+        { value: 'FULL_DAY', label: 'Full Day', color: 'success' },
+        { value: 'HALF_DAY', label: 'Half Day', color: 'warning' },
+        { value: 'ABSENT', label: 'Absent', color: 'error' },
     ]
 
     return (
@@ -123,105 +143,110 @@ export default function AttendancePage() {
                 title="Attendance"
                 description="Mark daily attendance for all labors"
                 actions={
-                    <Button onClick={handleSave} isLoading={isSaving}>
+                    <Button onClick={handleSaveAll} isLoading={saving}>
                         <Save className="w-4 h-4 mr-2" />
                         Save All
                     </Button>
                 }
             />
 
-            {message && (
-                <div className={`mb-6 p-4 rounded-lg ${message.type === 'success'
-                        ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
-                        : 'bg-rose-500/20 border border-rose-500/30 text-rose-400'
-                    }`}>
-                    {message.text}
-                </div>
-            )}
-
+            {/* Date Selector */}
             <Card className="mb-6">
                 <CardContent className="py-4">
-                    <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <Calendar className="w-5 h-5 text-slate-400" />
-                            <Input
+                    <div className="flex items-center justify-center gap-4">
+                        <Button variant="ghost" size="sm" onClick={() => changeDate(-1)}>
+                            <ChevronLeft className="w-5 h-5" />
+                        </Button>
+                        <div className="flex items-center gap-3">
+                            <Calendar className="w-5 h-5 text-indigo-400" />
+                            <input
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="w-auto"
+                                className="bg-transparent text-white font-medium text-lg focus:outline-none"
                             />
+                            <span className="text-slate-400 text-sm">
+                                ({formatDate(date)})
+                            </span>
                         </div>
-                        <div className="flex gap-2 ml-auto">
-                            <Button size="sm" variant="ghost" onClick={() => markAllAs('FULL_DAY')}>
-                                All Present
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => markAllAs('ABSENT')}>
-                                All Absent
-                            </Button>
-                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => changeDate(1)}>
+                            <ChevronRight className="w-5 h-5" />
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
 
+            {/* Attendance List */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Users className="w-5 h-5 text-indigo-400" />
-                        Labors ({labors.length})
+                    <CardTitle>
+                        Mark Attendance
+                        <span className="ml-2 text-sm font-normal text-slate-400">
+                            ({labors.length} labors)
+                        </span>
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? (
-                        <div className="text-center py-12 text-slate-400">Loading...</div>
+                    {loading ? (
+                        <div className="py-12 text-center text-slate-400">Loading...</div>
                     ) : labors.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400">
-                            No active labors found. Add some labors first.
-                        </div>
+                        <EmptyState
+                            icon={<Calendar className="w-8 h-8" />}
+                            title="No Active Labors"
+                            description="Add labors first to mark their attendance"
+                        />
                     ) : (
                         <div className="space-y-3">
-                            {labors.map((labor) => (
+                            {Array.from(attendance.values()).map((entry) => (
                                 <div
-                                    key={labor.id}
+                                    key={entry.laborId}
                                     className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl bg-slate-800/30 border border-slate-700/50"
                                 >
-                                    <div className="flex items-center gap-3 min-w-[200px]">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                                            {labor.fullName.charAt(0).toUpperCase()}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-white">{entry.laborName}</span>
+                                            {entry.existing && (
+                                                <Badge variant="success" className="text-xs">Saved</Badge>
+                                            )}
                                         </div>
-                                        <div>
-                                            <p className="font-medium text-white">{labor.fullName}</p>
-                                            <p className="text-xs text-slate-500">{labor.role || 'Worker'}</p>
-                                        </div>
+                                        <Select
+                                            options={sites.map(s => ({ value: s.id, label: s.name }))}
+                                            value={entry.siteId || ''}
+                                            onChange={(e) => handleSiteChange(entry.laborId, e.target.value)}
+                                            placeholder="Select site"
+                                            className="mt-2 sm:hidden"
+                                        />
                                     </div>
 
-                                    <div className="flex flex-wrap items-center gap-3 flex-1">
-                                        <div className="flex gap-2">
-                                            {(['FULL_DAY', 'HALF_DAY', 'ABSENT'] as AttendanceType[]).map((type) => (
-                                                <button
-                                                    key={type}
-                                                    onClick={() => updateLabor(labor.id, 'attendanceType', type)}
-                                                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${labor.attendanceType === type
-                                                            ? type === 'FULL_DAY' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
-                                                                : type === 'HALF_DAY' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
-                                                                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
-                                                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-                                                        }`}
-                                                >
-                                                    {type.replace('_', ' ')}
-                                                </button>
-                                            ))}
-                                        </div>
+                                    <div className="hidden sm:block w-48">
+                                        <Select
+                                            options={sites.map(s => ({ value: s.id, label: s.name }))}
+                                            value={entry.siteId || ''}
+                                            onChange={(e) => handleSiteChange(entry.laborId, e.target.value)}
+                                            placeholder="Select site"
+                                        />
+                                    </div>
 
-                                        <select
-                                            value={labor.siteId}
-                                            onChange={(e) => updateLabor(labor.id, 'siteId', e.target.value)}
-                                            className="px-3 py-1.5 text-sm rounded-lg bg-slate-800 border border-slate-700 text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                                        >
-                                            <option value="">No Site</option>
-                                            {sites.map(site => (
-                                                <option key={site.value} value={site.value}>{site.label}</option>
-                                            ))}
-                                        </select>
+                                    <div className="flex gap-2">
+                                        {attendanceTypes.map((type) => (
+                                            <button
+                                                key={type.value}
+                                                onClick={() => handleAttendanceChange(entry.laborId, type.value)}
+                                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${entry.attendanceType === type.value
+                                                        ? type.value === 'FULL_DAY'
+                                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                                            : type.value === 'HALF_DAY'
+                                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                                        : 'bg-slate-700/50 text-slate-400 hover:text-white'
+                                                    }`}
+                                            >
+                                                {type.value === 'FULL_DAY' && <CheckCircle className="w-4 h-4 inline mr-1" />}
+                                                {type.value === 'HALF_DAY' && <Clock className="w-4 h-4 inline mr-1" />}
+                                                {type.value === 'ABSENT' && <XCircle className="w-4 h-4 inline mr-1" />}
+                                                {type.label}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             ))}

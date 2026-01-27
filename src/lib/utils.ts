@@ -1,4 +1,4 @@
-import { type ClassValue, clsx } from 'clsx'
+import { clsx, type ClassValue } from 'clsx'
 
 // Utility function to merge class names
 export function cn(...inputs: ClassValue[]) {
@@ -10,7 +10,6 @@ export function formatCurrency(amount: number): string {
     return new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR',
-        minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     }).format(amount)
 }
@@ -19,43 +18,56 @@ export function formatCurrency(amount: number): string {
 export function formatDate(date: Date | string): string {
     const d = new Date(date)
     return d.toLocaleDateString('en-IN', {
-        day: '2-digit',
+        weekday: 'short',
+        day: 'numeric',
         month: 'short',
         year: 'numeric',
     })
 }
 
-// Format date for input fields (YYYY-MM-DD)
-export function formatDateForInput(date: Date | string): string {
+// Format time
+export function formatTime(date: Date | string): string {
     const d = new Date(date)
-    return d.toISOString().split('T')[0]
+    return d.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+    })
 }
 
 // Get month name from date
-export function getMonthName(date: Date | string): string {
-    const d = new Date(date)
-    return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+export function getMonthName(date: Date): string {
+    return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+}
+
+// Get start of month
+export function getStartOfMonth(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), 1)
+}
+
+// Get end of month
+export function getEndOfMonth(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
 }
 
 // Calculate working days in a month
 export function getWorkingDaysInMonth(year: number, month: number): number {
-    const date = new Date(year, month, 1)
+    const start = new Date(year, month, 1)
+    const end = new Date(year, month + 1, 0)
     let workingDays = 0
 
-    while (date.getMonth() === month) {
-        const dayOfWeek = date.getDay()
-        if (dayOfWeek !== 0) { // Exclude Sundays
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const day = d.getDay()
+        if (day !== 0) { // Exclude only Sundays
             workingDays++
         }
-        date.setDate(date.getDate() + 1)
     }
 
     return workingDays
 }
 
-// Calculate daily rate from monthly salary
-export function calculateDailyRate(monthlySalary: number, workingDays: number = 26): number {
-    return monthlySalary / workingDays
+// Calculate daily salary from monthly
+export function calculateDailySalary(monthlySalary: number, workingDays: number = 26): number {
+    return Math.round(monthlySalary / workingDays)
 }
 
 // Calculate salary based on attendance
@@ -63,22 +75,14 @@ export function calculateSalaryFromAttendance(
     monthlySalary: number,
     fullDays: number,
     halfDays: number,
-    workingDaysInMonth: number = 26
+    workingDays: number = 26
 ): number {
-    const dailyRate = monthlySalary / workingDaysInMonth
-    return (fullDays * dailyRate) + (halfDays * dailyRate * 0.5)
+    const dailySalary = calculateDailySalary(monthlySalary, workingDays)
+    return Math.round((fullDays + halfDays * 0.5) * dailySalary)
 }
 
-// Get start and end of month
-export function getMonthRange(year: number, month: number): { start: Date; end: Date } {
-    const start = new Date(year, month, 1)
-    const end = new Date(year, month + 1, 0, 23, 59, 59, 999)
-    return { start, end }
-}
-
-// Get today's date at midnight
-export function getToday(): Date {
+// Get today's date in YYYY-MM-DD format
+export function getTodayString(): string {
     const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return today
+    return today.toISOString().split('T')[0]
 }

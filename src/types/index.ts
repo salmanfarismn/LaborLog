@@ -6,8 +6,8 @@ export type AttendanceType = 'FULL_DAY' | 'HALF_DAY' | 'ABSENT' | 'CUSTOM'
 
 export type PaymentType = 'ADVANCE' | 'SALARY' | 'BONUS' | 'OTHER'
 
-// Labor with relations
-export interface LaborWithRelations {
+// Labor types
+export interface Labor {
     id: string
     fullName: string
     phone: string | null
@@ -23,85 +23,6 @@ export interface LaborWithRelations {
     payments?: Payment[]
 }
 
-// WorkSite type
-export interface WorkSite {
-    id: string
-    name: string
-    address: string | null
-    description: string | null
-    isActive: boolean
-    createdAt: Date
-    updatedAt: Date
-    labors?: Labor[]
-}
-
-// Labor type
-export interface Labor {
-    id: string
-    fullName: string
-    phone: string | null
-    role: string | null
-    defaultSiteId: string | null
-    monthlySalary: number
-    joiningDate: Date
-    status: string
-    createdAt: Date
-    updatedAt: Date
-}
-
-// Attendance type
-export interface Attendance {
-    id: string
-    date: Date
-    laborId: string
-    siteId: string | null
-    attendanceType: string
-    checkIn: Date | null
-    checkOut: Date | null
-    totalHours: number | null
-    notes: string | null
-    createdAt: Date
-    updatedAt: Date
-    labor?: Labor
-    site?: WorkSite | null
-}
-
-// Payment type
-export interface Payment {
-    id: string
-    laborId: string
-    date: Date
-    amount: number
-    paymentType: string
-    notes: string | null
-    createdAt: Date
-    updatedAt: Date
-    labor?: Labor
-}
-
-// Dashboard stats
-export interface DashboardStats {
-    totalLabors: number
-    activeLabors: number
-    presentToday: number
-    absentToday: number
-    totalSitesActive: number
-    monthlySalaryPayable: number
-    monthlyAdvancesGiven: number
-    monthlyPaymentsMade: number
-}
-
-// Ledger entry for per-labor view
-export interface LedgerEntry {
-    date: Date
-    description: string
-    type: 'SALARY' | 'ADVANCE' | 'BONUS' | 'OTHER' | 'ATTENDANCE'
-    debit: number
-    credit: number
-    balance: number
-}
-
-// Form data types
 export interface LaborFormData {
     fullName: string
     phone?: string
@@ -112,11 +33,41 @@ export interface LaborFormData {
     status: LaborStatus
 }
 
-export interface SiteFormData {
+// Work Site types
+export interface WorkSite {
+    id: string
+    name: string
+    address: string | null
+    description: string | null
+    isActive: boolean
+    createdAt: Date
+    updatedAt: Date
+    labors?: Labor[]
+    attendances?: Attendance[]
+}
+
+export interface WorkSiteFormData {
     name: string
     address?: string
     description?: string
     isActive: boolean
+}
+
+// Attendance types
+export interface Attendance {
+    id: string
+    date: Date
+    laborId: string
+    siteId: string | null
+    attendanceType: AttendanceType
+    checkIn: Date | null
+    checkOut: Date | null
+    totalHours: number | null
+    notes: string | null
+    createdAt: Date
+    updatedAt: Date
+    labor?: Labor
+    site?: WorkSite | null
 }
 
 export interface AttendanceFormData {
@@ -130,6 +81,19 @@ export interface AttendanceFormData {
     notes?: string
 }
 
+// Payment types
+export interface Payment {
+    id: string
+    laborId: string
+    date: Date
+    amount: number
+    paymentType: PaymentType
+    notes: string | null
+    createdAt: Date
+    updatedAt: Date
+    labor?: Labor
+}
+
 export interface PaymentFormData {
     laborId: string
     date: string
@@ -138,15 +102,34 @@ export interface PaymentFormData {
     notes?: string
 }
 
-// Monthly attendance summary
-export interface MonthlyAttendanceSummary {
-    laborId: string
-    laborName: string
-    fullDays: number
-    halfDays: number
-    absents: number
-    customHours: number
-    totalWorkDays: number
-    monthlySalary: number
-    calculatedSalary: number
+// Dashboard types
+export interface DashboardStats {
+    totalLabors: number
+    activeLabors: number
+    presentToday: number
+    absentToday: number
+    totalSitesActive: number
+    monthlySalaryPayable: number
+    monthlyAdvancesGiven: number
+    monthlyPaymentsMade: number
+}
+
+// Ledger types
+export interface LedgerEntry {
+    id?: string
+    date: Date
+    type: 'salary' | 'payment' | 'advance' | 'bonus' | 'ADVANCE' | 'SALARY' | 'BONUS' | 'OTHER'
+    description: string
+    debit: number
+    credit: number
+    balance: number
+}
+
+export interface LaborLedger {
+    labor: Labor
+    entries: LedgerEntry[]
+    totalSalary: number
+    totalPaid: number
+    totalAdvance: number
+    balance: number
 }
