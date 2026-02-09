@@ -141,7 +141,7 @@ export async function getMonthlyAttendanceSummary(year: number, month: number) {
 
         // Get all active labors
         const labors = await Labor.find({ status: 'ACTIVE' })
-            .select('_id fullName monthlySalary')
+            .select('_id fullName dailyWage')
             .lean()
 
         // Calculate summary for each labor
@@ -156,7 +156,7 @@ export async function getMonthlyAttendanceSummary(year: number, month: number) {
             const absents = laborAttendances.find(a => a._id.attendanceType === 'ABSENT')?.count || 0
 
             const effectiveDays = fullDays + (halfDays * 0.5)
-            const dailyRate = labor.monthlySalary / 26 // Assuming 26 working days
+            const dailyRate = labor.dailyWage // Direct daily wage
             const calculatedSalary = effectiveDays * dailyRate
 
             return {
@@ -167,7 +167,7 @@ export async function getMonthlyAttendanceSummary(year: number, month: number) {
                 absents,
                 customHours: 0,
                 totalWorkDays: fullDays + halfDays,
-                monthlySalary: labor.monthlySalary,
+                dailyWage: labor.dailyWage,
                 calculatedSalary: Math.round(calculatedSalary),
             }
         })

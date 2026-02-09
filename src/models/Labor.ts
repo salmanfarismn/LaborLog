@@ -6,7 +6,9 @@ export interface ILabor {
     phone?: string | null
     role?: string | null
     defaultSiteId?: mongoose.Types.ObjectId | string | null
-    monthlySalary: number
+    dailyWage: number
+    /** @deprecated Preserved for migration rollback only */
+    _legacyMonthlySalary?: number | null
     joiningDate: Date
     status: 'ACTIVE' | 'INACTIVE'
     createdAt: Date
@@ -43,10 +45,14 @@ const LaborSchema = new Schema<ILaborDocument>(
             ref: 'WorkSite',
             default: null,
         },
-        monthlySalary: {
+        dailyWage: {
             type: Number,
             default: 0,
-            min: [0, 'Monthly salary cannot be negative'],
+            min: [0, 'Daily wage cannot be negative'],
+        },
+        _legacyMonthlySalary: {
+            type: Number,
+            default: null,
         },
         joiningDate: {
             type: Date,

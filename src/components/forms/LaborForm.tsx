@@ -24,7 +24,7 @@ export function LaborForm({ labor, sites }: LaborFormProps) {
         phone: labor?.phone || '',
         role: labor?.role || '',
         defaultSiteId: labor?.defaultSiteId || '',
-        monthlySalary: labor?.monthlySalary || 0,
+        dailyWage: labor?.dailyWage || 0,
         joiningDate: labor ? formatDateForInput(labor.joiningDate) : formatDateForInput(new Date()),
         status: (labor?.status as 'ACTIVE' | 'INACTIVE') || 'ACTIVE',
     })
@@ -98,9 +98,9 @@ export function LaborForm({ labor, sites }: LaborFormProps) {
                 />
 
                 <Input
-                    label="Monthly Salary *"
-                    value={formData.monthlySalary}
-                    onChange={(e) => setFormData({ ...formData, monthlySalary: Number(e.target.value) })}
+                    label="Daily Wage (₹) *"
+                    value={formData.dailyWage}
+                    onChange={(e) => setFormData({ ...formData, dailyWage: Number(e.target.value) })}
                     type="number"
                     min="0"
                     required

@@ -26,7 +26,7 @@ interface PaymentLeanResult {
 interface LaborLeanResult {
     _id: mongoose.Types.ObjectId
     fullName: string
-    monthlySalary: number
+    dailyWage: number
 }
 
 // Get ledger for a specific labor
@@ -34,12 +34,12 @@ export async function getLaborLedger(
     laborId: string,
     startDate?: string,
     endDate?: string
-): Promise<{ success: boolean; data?: { labor: { id: string; fullName: string; monthlySalary: number }; entries: LedgerEntry[]; summary: { totalEarned: number; totalPaid: number; balance: number } }; error?: string }> {
+): Promise<{ success: boolean; data?: { labor: { id: string; fullName: string; dailyWage: number }; entries: LedgerEntry[]; summary: { totalEarned: number; totalPaid: number; balance: number } }; error?: string }> {
     try {
         await connectDB()
 
         const labor = await Labor.findById(laborId)
-            .select('fullName monthlySalary')
+            .select('fullName dailyWage')
             .lean() as LaborLeanResult | null
 
         if (!labor) {
@@ -71,8 +71,8 @@ export async function getLaborLedger(
                 .lean() as Promise<PaymentLeanResult[]>,
         ])
 
-        // Calculate daily rate
-        const dailyRate = labor.monthlySalary / 26
+        // Use dailyWage directly - no need to calculate from monthly
+        const dailyRate = labor.dailyWage
 
         // Build ledger entries
         const entries: LedgerEntry[] = []
@@ -147,7 +147,7 @@ export async function getLaborLedger(
                 labor: {
                     id: labor._id.toString(),
                     fullName: labor.fullName,
-                    monthlySalary: labor.monthlySalary,
+                    dailyWage: labor.dailyWage,
                 },
                 entries,
                 summary: {
@@ -169,7 +169,7 @@ export async function getAllLaborsBalance() {
         await connectDB()
 
         const labors = await Labor.find({ status: 'ACTIVE' })
-            .select('fullName monthlySalary')
+            .select('fullName dailyWage')
             .lean() as LaborLeanResult[]
 
         const today = new Date()
@@ -191,7 +191,7 @@ export async function getAllLaborsBalance() {
                     date: { $gte: startOfMonth },
                 }).lean() as PaymentLeanResult[]
 
-                const dailyRate = labor.monthlySalary / 26
+                const dailyRate = labor.dailyWage
 
                 let earned = 0
                 for (const att of attendances) {
@@ -205,7 +205,7 @@ export async function getAllLaborsBalance() {
                 return {
                     laborId: laborIdStr,
                     laborName: labor.fullName,
-                    monthlySalary: labor.monthlySalary,
+                    dailyWage: labor.dailyWage,
                     earned: Math.round(earned),
                     paid: Math.round(paid),
                     balance: Math.round(earned - paid),

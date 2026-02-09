@@ -69,9 +69,9 @@ export default async function LaborProfilePage({ params }: LaborProfilePageProps
                         <div className="space-y-4">
                             <div className="flex items-center gap-3 text-sm">
                                 <Wallet className="w-5 h-5 text-slate-400" />
-                                <span className="text-slate-400">Salary:</span>
+                                <span className="text-slate-400">Daily Wage:</span>
                                 <span className="text-white font-medium ml-auto">
-                                    {formatCurrency(labor.monthlySalary)}/month
+                                    {formatCurrency(labor.dailyWage)}/day
                                 </span>
                             </div>
                             <div className="flex items-center gap-3 text-sm">

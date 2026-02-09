@@ -75,11 +75,11 @@ export async function getDashboardStats(): Promise<{ success: boolean; data?: Da
         // Get active sites count
         const totalSitesActive = await WorkSite.countDocuments({ isActive: true })
 
-        // Calculate monthly salary payable (sum of all active labors' monthly salaries)
+        // Calculate sum of all active labors' daily wages
         const activeLaborsData = await Labor.find({ status: 'ACTIVE' })
-            .select('monthlySalary')
+            .select('dailyWage')
             .lean()
-        const monthlySalaryPayable = activeLaborsData.reduce((sum, l) => sum + l.monthlySalary, 0)
+        const totalDailyWages = activeLaborsData.reduce((sum, l) => sum + (l.dailyWage || 0), 0)
 
         // Get monthly payments using aggregation (replaces Prisma groupBy)
         const monthlyPayments = await Payment.aggregate([
@@ -107,7 +107,7 @@ export async function getDashboardStats(): Promise<{ success: boolean; data?: Da
                 presentToday,
                 absentToday,
                 totalSitesActive,
-                monthlySalaryPayable,
+                totalDailyWages,
                 monthlyAdvancesGiven,
                 monthlyPaymentsMade,
             },

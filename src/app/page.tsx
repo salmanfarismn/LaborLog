@@ -51,8 +51,8 @@ export default async function DashboardPage() {
           iconClassName="from-cyan-500/20 to-teal-500/20"
         />
         <StatsCard
-          title="Monthly Payable"
-          value={formatCurrency(stats?.monthlySalaryPayable || 0)}
+          title="Total Daily Wages"
+          value={formatCurrency(stats?.totalDailyWages || 0)}
           icon={Wallet}
           iconClassName="from-amber-500/20 to-orange-500/20"
         />
@@ -126,8 +126,8 @@ export default async function DashboardPage() {
                     className="flex items-center gap-4 p-3 rounded-lg bg-slate-800/30"
                   >
                     <div className={`p-2 rounded-lg ${activity.type === 'payment'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-indigo-500/20 text-indigo-400'
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-indigo-500/20 text-indigo-400'
                       }`}>
                       {activity.type === 'payment' ? (
                         <Wallet className="w-4 h-4" />

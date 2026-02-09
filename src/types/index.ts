@@ -13,7 +13,7 @@ export interface LaborWithRelations {
     phone: string | null
     role: string | null
     defaultSiteId: string | null
-    monthlySalary: number
+    dailyWage: number
     joiningDate: Date
     status: string
     createdAt: Date
@@ -43,7 +43,7 @@ export interface Labor {
     phone: string | null
     role: string | null
     defaultSiteId: string | null
-    monthlySalary: number
+    dailyWage: number
     joiningDate: Date
     status: string
     createdAt: Date
@@ -87,7 +87,7 @@ export interface DashboardStats {
     presentToday: number
     absentToday: number
     totalSitesActive: number
-    monthlySalaryPayable: number
+    totalDailyWages: number
     monthlyAdvancesGiven: number
     monthlyPaymentsMade: number
 }
@@ -108,7 +108,7 @@ export interface LaborFormData {
     phone?: string
     role?: string
     defaultSiteId?: string
-    monthlySalary: number
+    dailyWage: number
     joiningDate: string
     status: LaborStatus
 }
@@ -148,6 +148,6 @@ export interface MonthlyAttendanceSummary {
     absents: number
     customHours: number
     totalWorkDays: number
-    monthlySalary: number
+    dailyWage: number
     calculatedSalary: number
 }

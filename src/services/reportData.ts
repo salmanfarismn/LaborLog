@@ -16,7 +16,7 @@ interface LaborLeanResult {
     phone?: string | null
     status: string
     defaultSiteId?: mongoose.Types.ObjectId | null
-    monthlySalary: number
+    dailyWage: number
     joiningDate: Date
 }
 
@@ -68,7 +68,7 @@ export async function getEmployeeReportData(
 
     // Fetch all matching labors
     const labors = await Labor.find(laborFilter)
-        .select('fullName phone status defaultSiteId monthlySalary joiningDate')
+        .select('fullName phone status defaultSiteId dailyWage joiningDate')
         .lean() as LaborLeanResult[]
 
     if (labors.length === 0) {
@@ -162,8 +162,8 @@ export async function getEmployeeReportData(
         const attendance = attendanceMap.get(laborIdStr) || { present: 0, absent: 0, overtimeHours: 0 }
         const payment = paymentMap.get(laborIdStr) || { totalPaid: 0, lastPaymentDate: null }
 
-        // Calculate wages earned based on attendance
-        const dailyRate = labor.monthlySalary / 26
+        // Use daily wage directly
+        const dailyRate = labor.dailyWage
 
         // Get detailed attendance for wage calculation
         const fullDays = attendanceAgg.find(

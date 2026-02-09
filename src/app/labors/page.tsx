@@ -59,9 +59,9 @@ export default async function LaborsPage() {
 
                                     <div className="space-y-2 text-sm">
                                         <div className="flex justify-between">
-                                            <span className="text-slate-400">Monthly Salary</span>
+                                            <span className="text-slate-400">Daily Wage</span>
                                             <span className="text-white font-medium">
-                                                {formatCurrency(labor.monthlySalary)}
+                                                {formatCurrency(labor.dailyWage)}/day
                                             </span>
                                         </div>
                                         <div className="flex justify-between">

@@ -13,7 +13,7 @@ import { BookOpen, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 interface LaborBalance {
     laborId: string
     laborName: string
-    monthlySalary: number
+    dailyWage: number
     earned: number
     paid: number
     balance: number
@@ -105,7 +105,7 @@ export default function LedgerPage() {
                                 <thead>
                                     <tr className="border-b border-slate-700/50">
                                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">Labor</th>
-                                        <th className="px-4 py-3 text-right text-sm font-semibold text-slate-300">M. Salary</th>
+                                        <th className="px-4 py-3 text-right text-sm font-semibold text-slate-300">Daily Wage</th>
                                         <th className="px-4 py-3 text-right text-sm font-semibold text-slate-300">Earned</th>
                                         <th className="px-4 py-3 text-right text-sm font-semibold text-slate-300">Paid</th>
                                         <th className="px-4 py-3 text-right text-sm font-semibold text-slate-300">Balance</th>
@@ -122,7 +122,7 @@ export default function LedgerPage() {
                                                 <span className="font-medium text-white">{b.laborName}</span>
                                             </td>
                                             <td className="px-4 py-3 text-right text-slate-400">
-                                                {formatCurrency(b.monthlySalary)}
+                                                {formatCurrency(b.dailyWage)}/day
                                             </td>
                                             <td className="px-4 py-3 text-right text-emerald-400">
                                                 {formatCurrency(b.earned)}
@@ -184,8 +184,8 @@ export default function LedgerPage() {
                                         <p className="text-sm text-slate-400">Total Paid</p>
                                     </div>
                                     <div className={`p-4 rounded-xl text-center ${summary.balance >= 0
-                                            ? 'bg-cyan-500/10 border border-cyan-500/30'
-                                            : 'bg-rose-500/10 border border-rose-500/30'
+                                        ? 'bg-cyan-500/10 border border-cyan-500/30'
+                                        : 'bg-rose-500/10 border border-rose-500/30'
                                         }`}>
                                         <Minus className={`w-6 h-6 mx-auto mb-2 ${summary.balance >= 0 ? 'text-cyan-400' : 'text-rose-400'}`} />
                                         <p className={`text-2xl font-bold ${summary.balance >= 0 ? 'text-cyan-400' : 'text-rose-400'}`}>

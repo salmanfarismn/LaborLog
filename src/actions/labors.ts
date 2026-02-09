@@ -15,7 +15,7 @@ interface LaborLeanResult {
     phone?: string | null
     role?: string | null
     defaultSiteId?: mongoose.Types.ObjectId | null
-    monthlySalary: number
+    dailyWage: number
     joiningDate: Date
     status: 'ACTIVE' | 'INACTIVE'
     createdAt: Date
@@ -79,7 +79,7 @@ export async function getLabors(status?: string) {
             phone: labor.phone || null,
             role: labor.role || null,
             defaultSiteId: labor.defaultSiteId?.toString() || null,
-            monthlySalary: labor.monthlySalary,
+            dailyWage: labor.dailyWage,
             joiningDate: labor.joiningDate,
             status: labor.status,
             createdAt: labor.createdAt,
@@ -169,7 +169,7 @@ export async function createLabor(data: LaborFormData) {
             phone: data.phone || null,
             role: data.role || null,
             defaultSiteId: data.defaultSiteId || null,
-            monthlySalary: data.monthlySalary,
+            dailyWage: data.dailyWage,
             joiningDate: new Date(data.joiningDate),
             status: data.status,
         })
@@ -202,7 +202,7 @@ export async function updateLabor(id: string, data: LaborFormData) {
                 phone: data.phone || null,
                 role: data.role || null,
                 defaultSiteId: data.defaultSiteId || null,
-                monthlySalary: data.monthlySalary,
+                dailyWage: data.dailyWage,
                 joiningDate: new Date(data.joiningDate),
                 status: data.status,
             },

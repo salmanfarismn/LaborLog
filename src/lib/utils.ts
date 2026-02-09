@@ -53,20 +53,24 @@ export function getWorkingDaysInMonth(year: number, month: number): number {
     return workingDays
 }
 
-// Calculate daily rate from monthly salary
-export function calculateDailyRate(monthlySalary: number, workingDays: number = 26): number {
-    return monthlySalary / workingDays
+// Calculate daily rate from monthly salary - used for migration only
+export function calculateDailyRateFromMonthly(monthlySalary: number, workingDays: number = 26): number {
+    return Math.round(monthlySalary / workingDays)
 }
 
-// Calculate salary based on attendance
-export function calculateSalaryFromAttendance(
-    monthlySalary: number,
+// Calculate wages based on attendance and daily wage
+export function calculateWagesFromAttendance(
+    dailyWage: number,
     fullDays: number,
     halfDays: number,
-    workingDaysInMonth: number = 26
+    customHours: number = 0,
+    hoursPerDay: number = 8
 ): number {
-    const dailyRate = monthlySalary / workingDaysInMonth
-    return (fullDays * dailyRate) + (halfDays * dailyRate * 0.5)
+    return Math.round(
+        (fullDays * dailyWage) +
+        (halfDays * dailyWage * 0.5) +
+        (customHours * (dailyWage / hoursPerDay))
+    )
 }
 
 // Get start and end of month
