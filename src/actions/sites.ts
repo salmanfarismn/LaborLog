@@ -1,22 +1,38 @@
 'use server'
 
-import prisma from '@/lib/prisma'
+import connectDB from '@/lib/mongodb'
+import WorkSite from '@/models/WorkSite'
+import Labor from '@/models/Labor'
+import Attendance from '@/models/Attendance'
 import { revalidatePath } from 'next/cache'
 import type { SiteFormData } from '@/types'
 
 // Get all work sites
 export async function getSites(activeOnly: boolean = false) {
     try {
-        const sites = await prisma.workSite.findMany({
-            where: activeOnly ? { isActive: true } : undefined,
-            include: {
-                _count: {
-                    select: { labors: true },
-                },
-            },
-            orderBy: { createdAt: 'desc' },
-        })
-        return { success: true, data: sites }
+        await connectDB()
+
+        const filter = activeOnly ? { isActive: true } : {}
+
+        const sites = await WorkSite.find(filter)
+            .sort({ createdAt: -1 })
+            .lean()
+
+        // Get labor counts for each site
+        const sitesWithCount = await Promise.all(
+            sites.map(async site => {
+                const laborCount = await Labor.countDocuments({ defaultSiteId: site._id })
+                return {
+                    ...site,
+                    id: site._id.toString(),
+                    _count: {
+                        labors: laborCount,
+                    },
+                }
+            })
+        )
+
+        return { success: true, data: sitesWithCount }
     } catch (error) {
         console.error('Error fetching sites:', error)
         return { success: false, error: 'Failed to fetch sites' }
@@ -26,24 +42,37 @@ export async function getSites(activeOnly: boolean = false) {
 // Get a single site by ID
 export async function getSiteById(id: string) {
     try {
-        const site = await prisma.workSite.findUnique({
-            where: { id },
-            include: {
-                labors: {
-                    where: { status: 'ACTIVE' },
-                    select: { id: true, fullName: true, role: true },
-                },
-                _count: {
-                    select: { attendances: true },
-                },
-            },
-        })
+        await connectDB()
+
+        const site = await WorkSite.findById(id).lean()
 
         if (!site) {
             return { success: false, error: 'Site not found' }
         }
 
-        return { success: true, data: site }
+        // Get active labors assigned to this site
+        const labors = await Labor.find({ defaultSiteId: id, status: 'ACTIVE' })
+            .select('_id fullName role')
+            .lean()
+
+        // Get attendance count for this site
+        const attendanceCount = await Attendance.countDocuments({ siteId: id })
+
+        // Transform to match expected format
+        const siteData = {
+            ...site,
+            id: site._id.toString(),
+            labors: labors.map(l => ({
+                id: l._id.toString(),
+                fullName: l.fullName,
+                role: l.role,
+            })),
+            _count: {
+                attendances: attendanceCount,
+            },
+        }
+
+        return { success: true, data: siteData }
     } catch (error) {
         console.error('Error fetching site:', error)
         return { success: false, error: 'Failed to fetch site' }
@@ -53,18 +82,25 @@ export async function getSiteById(id: string) {
 // Create a new site
 export async function createSite(data: SiteFormData) {
     try {
-        const site = await prisma.workSite.create({
-            data: {
-                name: data.name,
-                address: data.address || null,
-                description: data.description || null,
-                isActive: data.isActive,
-            },
+        await connectDB()
+
+        const site = await WorkSite.create({
+            name: data.name,
+            address: data.address || null,
+            description: data.description || null,
+            isActive: data.isActive,
         })
 
         revalidatePath('/sites')
         revalidatePath('/')
-        return { success: true, data: site }
+
+        return {
+            success: true,
+            data: {
+                ...site.toJSON(),
+                id: site._id.toString(),
+            },
+        }
     } catch (error) {
         console.error('Error creating site:', error)
         return { success: false, error: 'Failed to create site' }
@@ -74,19 +110,33 @@ export async function createSite(data: SiteFormData) {
 // Update an existing site
 export async function updateSite(id: string, data: SiteFormData) {
     try {
-        const site = await prisma.workSite.update({
-            where: { id },
-            data: {
+        await connectDB()
+
+        const site = await WorkSite.findByIdAndUpdate(
+            id,
+            {
                 name: data.name,
                 address: data.address || null,
                 description: data.description || null,
                 isActive: data.isActive,
             },
-        })
+            { new: true, runValidators: true }
+        )
+
+        if (!site) {
+            return { success: false, error: 'Site not found' }
+        }
 
         revalidatePath('/sites')
         revalidatePath(`/sites/${id}`)
-        return { success: true, data: site }
+
+        return {
+            success: true,
+            data: {
+                ...site.toJSON(),
+                id: site._id.toString(),
+            },
+        }
     } catch (error) {
         console.error('Error updating site:', error)
         return { success: false, error: 'Failed to update site' }
@@ -96,19 +146,24 @@ export async function updateSite(id: string, data: SiteFormData) {
 // Delete a site
 export async function deleteSite(id: string) {
     try {
-        // First update all labors that have this as default site
-        await prisma.labor.updateMany({
-            where: { defaultSiteId: id },
-            data: { defaultSiteId: null },
-        })
+        await connectDB()
 
-        await prisma.workSite.delete({
-            where: { id },
-        })
+        // Clear defaultSiteId for labors that have this as their default site
+        await Labor.updateMany(
+            { defaultSiteId: id },
+            { $set: { defaultSiteId: null } }
+        )
+
+        const result = await WorkSite.findByIdAndDelete(id)
+
+        if (!result) {
+            return { success: false, error: 'Site not found' }
+        }
 
         revalidatePath('/sites')
         revalidatePath('/labors')
         revalidatePath('/')
+
         return { success: true }
     } catch (error) {
         console.error('Error deleting site:', error)
@@ -119,20 +174,26 @@ export async function deleteSite(id: string) {
 // Toggle site active status
 export async function toggleSiteStatus(id: string) {
     try {
-        const site = await prisma.workSite.findUnique({ where: { id } })
+        await connectDB()
+
+        const site = await WorkSite.findById(id)
+
         if (!site) {
             return { success: false, error: 'Site not found' }
         }
 
-        const updatedSite = await prisma.workSite.update({
-            where: { id },
-            data: {
-                isActive: !site.isActive,
-            },
-        })
+        site.isActive = !site.isActive
+        await site.save()
 
         revalidatePath('/sites')
-        return { success: true, data: updatedSite }
+
+        return {
+            success: true,
+            data: {
+                ...site.toJSON(),
+                id: site._id.toString(),
+            },
+        }
     } catch (error) {
         console.error('Error toggling site status:', error)
         return { success: false, error: 'Failed to toggle status' }

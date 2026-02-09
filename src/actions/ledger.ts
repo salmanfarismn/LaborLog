@@ -1,7 +1,33 @@
 'use server'
 
-import prisma from '@/lib/prisma'
+import connectDB from '@/lib/mongodb'
+import Labor from '@/models/Labor'
+import Attendance from '@/models/Attendance'
+import Payment from '@/models/Payment'
 import type { LedgerEntry } from '@/types'
+import mongoose from 'mongoose'
+
+// Interface for lean results
+interface AttendanceLeanResult {
+    _id: mongoose.Types.ObjectId
+    date: Date
+    attendanceType: string
+    totalHours?: number | null
+}
+
+interface PaymentLeanResult {
+    _id: mongoose.Types.ObjectId
+    date: Date
+    amount: number
+    paymentType: string
+    notes?: string | null
+}
+
+interface LaborLeanResult {
+    _id: mongoose.Types.ObjectId
+    fullName: string
+    monthlySalary: number
+}
 
 // Get ledger for a specific labor
 export async function getLaborLedger(
@@ -10,10 +36,11 @@ export async function getLaborLedger(
     endDate?: string
 ): Promise<{ success: boolean; data?: { labor: { id: string; fullName: string; monthlySalary: number }; entries: LedgerEntry[]; summary: { totalEarned: number; totalPaid: number; balance: number } }; error?: string }> {
     try {
-        const labor = await prisma.labor.findUnique({
-            where: { id: laborId },
-            select: { id: true, fullName: true, monthlySalary: true },
-        })
+        await connectDB()
+
+        const labor = await Labor.findById(laborId)
+            .select('fullName monthlySalary')
+            .lean() as LaborLeanResult | null
 
         if (!labor) {
             return { success: false, error: 'Labor not found' }
@@ -30,20 +57,18 @@ export async function getLaborLedger(
 
         // Get attendance and payments
         const [attendances, payments] = await Promise.all([
-            prisma.attendance.findMany({
-                where: {
-                    laborId,
-                    date: { gte: start, lte: end },
-                },
-                orderBy: { date: 'asc' },
-            }),
-            prisma.payment.findMany({
-                where: {
-                    laborId,
-                    date: { gte: start, lte: end },
-                },
-                orderBy: { date: 'asc' },
-            }),
+            Attendance.find({
+                laborId,
+                date: { $gte: start, $lte: end },
+            })
+                .sort({ date: 1 })
+                .lean() as Promise<AttendanceLeanResult[]>,
+            Payment.find({
+                laborId,
+                date: { $gte: start, $lte: end },
+            })
+                .sort({ date: 1 })
+                .lean() as Promise<PaymentLeanResult[]>,
         ])
 
         // Calculate daily rate
@@ -119,7 +144,11 @@ export async function getLaborLedger(
         return {
             success: true,
             data: {
-                labor,
+                labor: {
+                    id: labor._id.toString(),
+                    fullName: labor.fullName,
+                    monthlySalary: labor.monthlySalary,
+                },
                 entries,
                 summary: {
                     totalEarned,
@@ -137,31 +166,30 @@ export async function getLaborLedger(
 // Get all labors with their current balance
 export async function getAllLaborsBalance() {
     try {
-        const labors = await prisma.labor.findMany({
-            where: { status: 'ACTIVE' },
-            select: { id: true, fullName: true, monthlySalary: true },
-        })
+        await connectDB()
+
+        const labors = await Labor.find({ status: 'ACTIVE' })
+            .select('fullName monthlySalary')
+            .lean() as LaborLeanResult[]
 
         const today = new Date()
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
 
         const balances = await Promise.all(
             labors.map(async (labor) => {
+                const laborIdStr = labor._id.toString()
+
                 // Get this month's attendance
-                const attendances = await prisma.attendance.findMany({
-                    where: {
-                        laborId: labor.id,
-                        date: { gte: startOfMonth },
-                    },
-                })
+                const attendances = await Attendance.find({
+                    laborId: labor._id,
+                    date: { $gte: startOfMonth },
+                }).lean() as AttendanceLeanResult[]
 
                 // Get this month's payments
-                const payments = await prisma.payment.findMany({
-                    where: {
-                        laborId: labor.id,
-                        date: { gte: startOfMonth },
-                    },
-                })
+                const payments = await Payment.find({
+                    laborId: labor._id,
+                    date: { $gte: startOfMonth },
+                }).lean() as PaymentLeanResult[]
 
                 const dailyRate = labor.monthlySalary / 26
 
@@ -175,7 +203,7 @@ export async function getAllLaborsBalance() {
                 const paid = payments.reduce((sum, p) => sum + p.amount, 0)
 
                 return {
-                    laborId: labor.id,
+                    laborId: laborIdStr,
                     laborName: labor.fullName,
                     monthlySalary: labor.monthlySalary,
                     earned: Math.round(earned),

@@ -1,11 +1,46 @@
 'use server'
 
-import prisma from '@/lib/prisma'
+import connectDB from '@/lib/mongodb'
+import Labor from '@/models/Labor'
+import WorkSite from '@/models/WorkSite'
+import Attendance from '@/models/Attendance'
+import Payment from '@/models/Payment'
 import type { DashboardStats } from '@/types'
+import mongoose from 'mongoose'
+
+// Interface for population results
+interface LaborPopulated {
+    _id: mongoose.Types.ObjectId
+    fullName: string
+}
+
+interface SitePopulated {
+    _id: mongoose.Types.ObjectId
+    name: string
+}
+
+interface AttendanceLeanResult {
+    _id: mongoose.Types.ObjectId
+    date: Date
+    attendanceType: string
+    createdAt: Date
+    labor: LaborPopulated
+    site?: SitePopulated | null
+}
+
+interface PaymentLeanResult {
+    _id: mongoose.Types.ObjectId
+    amount: number
+    paymentType: string
+    createdAt: Date
+    labor: LaborPopulated
+}
 
 // Get dashboard statistics
 export async function getDashboardStats(): Promise<{ success: boolean; data?: DashboardStats; error?: string }> {
     try {
+        await connectDB()
+
         const today = new Date()
         today.setHours(0, 0, 0, 0)
 
@@ -17,19 +52,17 @@ export async function getDashboardStats(): Promise<{ success: boolean; data?: Da
 
         // Get labor counts
         const [totalLabors, activeLabors] = await Promise.all([
-            prisma.labor.count(),
-            prisma.labor.count({ where: { status: 'ACTIVE' } }),
+            Labor.countDocuments(),
+            Labor.countDocuments({ status: 'ACTIVE' }),
         ])
 
         // Get today's attendance
-        const todayAttendance = await prisma.attendance.findMany({
-            where: {
-                date: {
-                    gte: today,
-                    lt: tomorrow,
-                },
+        const todayAttendance = await Attendance.find({
+            date: {
+                $gte: today,
+                $lt: tomorrow,
             },
-        })
+        }).lean()
 
         const presentToday = todayAttendance.filter(
             a => a.attendanceType === 'FULL_DAY' || a.attendanceType === 'HALF_DAY'
@@ -40,29 +73,31 @@ export async function getDashboardStats(): Promise<{ success: boolean; data?: Da
         ).length
 
         // Get active sites count
-        const totalSitesActive = await prisma.workSite.count({ where: { isActive: true } })
+        const totalSitesActive = await WorkSite.countDocuments({ isActive: true })
 
         // Calculate monthly salary payable (sum of all active labors' monthly salaries)
-        const activeLaborsData = await prisma.labor.findMany({
-            where: { status: 'ACTIVE' },
-            select: { monthlySalary: true },
-        })
+        const activeLaborsData = await Labor.find({ status: 'ACTIVE' })
+            .select('monthlySalary')
+            .lean()
         const monthlySalaryPayable = activeLaborsData.reduce((sum, l) => sum + l.monthlySalary, 0)
 
-        // Get monthly payments
-        const monthlyPayments = await prisma.payment.groupBy({
-            by: ['paymentType'],
-            where: {
-                date: {
-                    gte: startOfMonth,
-                    lte: endOfMonth,
+        // Get monthly payments using aggregation (replaces Prisma groupBy)
+        const monthlyPayments = await Payment.aggregate([
+            {
+                $match: {
+                    date: { $gte: startOfMonth, $lte: endOfMonth },
                 },
             },
-            _sum: { amount: true },
-        })
+            {
+                $group: {
+                    _id: '$paymentType',
+                    total: { $sum: '$amount' },
+                },
+            },
+        ])
 
-        const monthlyAdvancesGiven = monthlyPayments.find(p => p.paymentType === 'ADVANCE')?._sum.amount || 0
-        const monthlyPaymentsMade = monthlyPayments.reduce((sum, p) => sum + (p._sum.amount || 0), 0)
+        const monthlyAdvancesGiven = monthlyPayments.find(p => p._id === 'ADVANCE')?.total || 0
+        const monthlyPaymentsMade = monthlyPayments.reduce((sum, p) => sum + (p.total || 0), 0)
 
         return {
             success: true,
@@ -86,36 +121,34 @@ export async function getDashboardStats(): Promise<{ success: boolean; data?: Da
 // Get recent activities
 export async function getRecentActivities(limit: number = 10) {
     try {
+        await connectDB()
+
         const [recentAttendances, recentPayments] = await Promise.all([
-            prisma.attendance.findMany({
-                take: limit,
-                orderBy: { createdAt: 'desc' },
-                include: {
-                    labor: { select: { fullName: true } },
-                    site: { select: { name: true } },
-                },
-            }),
-            prisma.payment.findMany({
-                take: limit,
-                orderBy: { createdAt: 'desc' },
-                include: {
-                    labor: { select: { fullName: true } },
-                },
-            }),
+            Attendance.find()
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .populate('labor', '_id fullName')
+                .populate('site', '_id name')
+                .lean() as unknown as AttendanceLeanResult[],
+            Payment.find()
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .populate('labor', '_id fullName')
+                .lean() as unknown as PaymentLeanResult[],
         ])
 
         // Combine and sort by createdAt
         const activities = [
             ...recentAttendances.map(a => ({
                 type: 'attendance' as const,
-                id: a.id,
+                id: a._id.toString(),
                 date: a.createdAt,
                 description: `${a.labor.fullName} - ${a.attendanceType.replace('_', ' ')}`,
                 details: a.site?.name || 'No site',
             })),
             ...recentPayments.map(p => ({
                 type: 'payment' as const,
-                id: p.id,
+                id: p._id.toString(),
                 date: p.createdAt,
                 description: `${p.labor.fullName} - ₹${p.amount}`,
                 details: p.paymentType,

@@ -1,33 +1,74 @@
 'use server'
 
-import prisma from '@/lib/prisma'
+import connectDB from '@/lib/mongodb'
+import Attendance from '@/models/Attendance'
+import Labor from '@/models/Labor'
 import { revalidatePath } from 'next/cache'
 import type { AttendanceFormData } from '@/types'
+import mongoose from 'mongoose'
+
+// Interface for lean result with populated labor and site
+interface AttendanceLeanResult {
+    _id: mongoose.Types.ObjectId
+    date: Date
+    laborId: mongoose.Types.ObjectId
+    siteId?: mongoose.Types.ObjectId | null
+    attendanceType: string
+    checkIn?: Date | null
+    checkOut?: Date | null
+    totalHours?: number | null
+    notes?: string | null
+    createdAt: Date
+    updatedAt: Date
+    labor?: {
+        _id: mongoose.Types.ObjectId
+        fullName: string
+    } | null
+    site?: {
+        _id: mongoose.Types.ObjectId
+        name: string
+    } | null
+}
 
 // Get attendance for a specific date
 export async function getAttendanceByDate(date: string) {
     try {
+        await connectDB()
+
         const targetDate = new Date(date)
         targetDate.setHours(0, 0, 0, 0)
 
         const nextDay = new Date(targetDate)
         nextDay.setDate(nextDay.getDate() + 1)
 
-        const attendances = await prisma.attendance.findMany({
-            where: {
-                date: {
-                    gte: targetDate,
-                    lt: nextDay,
-                },
+        const attendances = await Attendance.find({
+            date: {
+                $gte: targetDate,
+                $lt: nextDay,
             },
-            include: {
-                labor: true,
-                site: true,
-            },
-            orderBy: { labor: { fullName: 'asc' } },
         })
+            .populate('labor', '_id fullName')
+            .populate('site', '_id name')
+            .sort({ 'labor.fullName': 1 })
+            .lean() as AttendanceLeanResult[]
 
-        return { success: true, data: attendances }
+        // Transform to match expected format
+        const transformed = attendances.map(att => ({
+            ...att,
+            id: att._id.toString(),
+            laborId: att.laborId.toString(),
+            siteId: att.siteId?.toString() || null,
+            labor: att.labor ? {
+                ...att.labor,
+                id: att.labor._id.toString(),
+            } : null,
+            site: att.site ? {
+                ...att.site,
+                id: att.site._id.toString(),
+            } : null,
+        }))
+
+        return { success: true, data: transformed }
     } catch (error) {
         console.error('Error fetching attendance:', error)
         return { success: false, error: 'Failed to fetch attendance' }
@@ -37,25 +78,38 @@ export async function getAttendanceByDate(date: string) {
 // Get attendance for a labor in a date range
 export async function getLaborAttendance(laborId: string, startDate: string, endDate: string) {
     try {
+        await connectDB()
+
         const start = new Date(startDate)
         start.setHours(0, 0, 0, 0)
 
         const end = new Date(endDate)
         end.setHours(23, 59, 59, 999)
 
-        const attendances = await prisma.attendance.findMany({
-            where: {
-                laborId,
-                date: {
-                    gte: start,
-                    lte: end,
-                },
+        const attendances = await Attendance.find({
+            laborId,
+            date: {
+                $gte: start,
+                $lte: end,
             },
-            include: { site: true },
-            orderBy: { date: 'desc' },
         })
+            .populate('site', '_id name')
+            .sort({ date: -1 })
+            .lean() as AttendanceLeanResult[]
 
-        return { success: true, data: attendances }
+        // Transform to match expected format
+        const transformed = attendances.map(att => ({
+            ...att,
+            id: att._id.toString(),
+            laborId: att.laborId.toString(),
+            siteId: att.siteId?.toString() || null,
+            site: att.site ? {
+                ...att.site,
+                id: att.site._id.toString(),
+            } : null,
+        }))
+
+        return { success: true, data: transformed }
     } catch (error) {
         console.error('Error fetching labor attendance:', error)
         return { success: false, error: 'Failed to fetch attendance' }
@@ -65,40 +119,48 @@ export async function getLaborAttendance(laborId: string, startDate: string, end
 // Get monthly attendance summary for all labors
 export async function getMonthlyAttendanceSummary(year: number, month: number) {
     try {
+        await connectDB()
+
         const startDate = new Date(year, month, 1)
         const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999)
 
-        const attendances = await prisma.attendance.groupBy({
-            by: ['laborId', 'attendanceType'],
-            where: {
-                date: {
-                    gte: startDate,
-                    lte: endDate,
+        // Use MongoDB aggregation pipeline (replaces Prisma groupBy)
+        const attendanceAgg = await Attendance.aggregate([
+            {
+                $match: {
+                    date: { $gte: startDate, $lte: endDate },
                 },
             },
-            _count: true,
-        })
+            {
+                $group: {
+                    _id: { laborId: '$laborId', attendanceType: '$attendanceType' },
+                    count: { $sum: 1 },
+                },
+            },
+        ])
 
         // Get all active labors
-        const labors = await prisma.labor.findMany({
-            where: { status: 'ACTIVE' },
-            select: { id: true, fullName: true, monthlySalary: true },
-        })
+        const labors = await Labor.find({ status: 'ACTIVE' })
+            .select('_id fullName monthlySalary')
+            .lean()
 
         // Calculate summary for each labor
         const summary = labors.map(labor => {
-            const laborAttendances = attendances.filter(a => a.laborId === labor.id)
+            const laborIdStr = labor._id.toString()
+            const laborAttendances = attendanceAgg.filter(
+                a => a._id.laborId.toString() === laborIdStr
+            )
 
-            const fullDays = laborAttendances.find(a => a.attendanceType === 'FULL_DAY')?._count || 0
-            const halfDays = laborAttendances.find(a => a.attendanceType === 'HALF_DAY')?._count || 0
-            const absents = laborAttendances.find(a => a.attendanceType === 'ABSENT')?._count || 0
+            const fullDays = laborAttendances.find(a => a._id.attendanceType === 'FULL_DAY')?.count || 0
+            const halfDays = laborAttendances.find(a => a._id.attendanceType === 'HALF_DAY')?.count || 0
+            const absents = laborAttendances.find(a => a._id.attendanceType === 'ABSENT')?.count || 0
 
             const effectiveDays = fullDays + (halfDays * 0.5)
             const dailyRate = labor.monthlySalary / 26 // Assuming 26 working days
             const calculatedSalary = effectiveDays * dailyRate
 
             return {
-                laborId: labor.id,
+                laborId: laborIdStr,
                 laborName: labor.fullName,
                 fullDays,
                 halfDays,
@@ -120,39 +182,44 @@ export async function getMonthlyAttendanceSummary(year: number, month: number) {
 // Create or update attendance (upsert)
 export async function saveAttendance(data: AttendanceFormData) {
     try {
+        await connectDB()
+
         const date = new Date(data.date)
         date.setHours(0, 0, 0, 0)
 
-        const attendance = await prisma.attendance.upsert({
-            where: {
-                date_laborId: {
+        // Use findOneAndUpdate with upsert for atomic operation
+        const attendance = await Attendance.findOneAndUpdate(
+            {
+                date,
+                laborId: data.laborId,
+            },
+            {
+                $set: {
+                    siteId: data.siteId || null,
+                    attendanceType: data.attendanceType,
+                    checkIn: data.checkIn ? new Date(`${data.date}T${data.checkIn}`) : null,
+                    checkOut: data.checkOut ? new Date(`${data.date}T${data.checkOut}`) : null,
+                    totalHours: data.totalHours || null,
+                    notes: data.notes || null,
+                },
+                $setOnInsert: {
                     date,
                     laborId: data.laborId,
                 },
             },
-            update: {
-                siteId: data.siteId || null,
-                attendanceType: data.attendanceType,
-                checkIn: data.checkIn ? new Date(`${data.date}T${data.checkIn}`) : null,
-                checkOut: data.checkOut ? new Date(`${data.date}T${data.checkOut}`) : null,
-                totalHours: data.totalHours || null,
-                notes: data.notes || null,
-            },
-            create: {
-                date,
-                laborId: data.laborId,
-                siteId: data.siteId || null,
-                attendanceType: data.attendanceType,
-                checkIn: data.checkIn ? new Date(`${data.date}T${data.checkIn}`) : null,
-                checkOut: data.checkOut ? new Date(`${data.date}T${data.checkOut}`) : null,
-                totalHours: data.totalHours || null,
-                notes: data.notes || null,
-            },
-        })
+            { upsert: true, new: true, runValidators: true }
+        )
 
         revalidatePath('/attendance')
         revalidatePath('/')
-        return { success: true, data: attendance }
+
+        return {
+            success: true,
+            data: {
+                ...attendance.toJSON(),
+                id: attendance._id.toString(),
+            },
+        }
     } catch (error) {
         console.error('Error saving attendance:', error)
         return { success: false, error: 'Failed to save attendance' }
@@ -173,6 +240,7 @@ export async function bulkSaveAttendance(attendances: AttendanceFormData[]) {
 
         revalidatePath('/attendance')
         revalidatePath('/')
+
         return { success: true, data: results.map(r => r.data) }
     } catch (error) {
         console.error('Error bulk saving attendance:', error)
@@ -183,11 +251,16 @@ export async function bulkSaveAttendance(attendances: AttendanceFormData[]) {
 // Delete attendance record
 export async function deleteAttendance(id: string) {
     try {
-        await prisma.attendance.delete({
-            where: { id },
-        })
+        await connectDB()
+
+        const result = await Attendance.findByIdAndDelete(id)
+
+        if (!result) {
+            return { success: false, error: 'Attendance record not found' }
+        }
 
         revalidatePath('/attendance')
+
         return { success: true }
     } catch (error) {
         console.error('Error deleting attendance:', error)

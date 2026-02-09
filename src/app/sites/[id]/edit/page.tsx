@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { SiteForm } from '@/components/forms/SiteForm'
 import { getSiteById } from '@/actions/sites'
 import { notFound } from 'next/navigation'
+import type { WorkSite } from '@/types'
 
 interface EditSitePageProps {
     params: Promise<{ id: string }>
@@ -16,18 +17,22 @@ export default async function EditSitePage({ params }: EditSitePageProps) {
         notFound()
     }
 
+    // Cast to expected type
+    const site = result.data as unknown as WorkSite
+
     return (
         <div className="animate-fade-in max-w-2xl">
             <Header
                 title="Edit Site"
-                description={`Editing ${result.data.name}`}
+                description={`Editing ${site.name}`}
             />
 
             <Card>
                 <CardContent className="py-6">
-                    <SiteForm site={result.data} />
+                    <SiteForm site={site} />
                 </CardContent>
             </Card>
         </div>
     )
 }
+

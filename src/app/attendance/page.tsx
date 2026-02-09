@@ -57,11 +57,11 @@ export default function AttendancePage() {
                 return {
                     id: labor.id,
                     fullName: labor.fullName,
-                    role: labor.role,
-                    defaultSiteId: labor.defaultSiteId,
+                    role: labor.role ?? null,
+                    defaultSiteId: labor.defaultSiteId ?? null,
                     attendanceType: (existing?.attendanceType as AttendanceType) || 'FULL_DAY',
-                    siteId: existing?.siteId || labor.defaultSiteId || '',
-                    notes: existing?.notes || '',
+                    siteId: existing?.siteId ?? labor.defaultSiteId ?? '',
+                    notes: existing?.notes ?? '',
                 }
             })
 
@@ -132,8 +132,8 @@ export default function AttendancePage() {
 
             {message && (
                 <div className={`mb-6 p-4 rounded-lg ${message.type === 'success'
-                        ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
-                        : 'bg-rose-500/20 border border-rose-500/30 text-rose-400'
+                    ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                    : 'bg-rose-500/20 border border-rose-500/30 text-rose-400'
                     }`}>
                     {message.text}
                 </div>
@@ -201,10 +201,10 @@ export default function AttendancePage() {
                                                     key={type}
                                                     onClick={() => updateLabor(labor.id, 'attendanceType', type)}
                                                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${labor.attendanceType === type
-                                                            ? type === 'FULL_DAY' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
-                                                                : type === 'HALF_DAY' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
-                                                                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
-                                                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                                                        ? type === 'FULL_DAY' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                                                            : type === 'HALF_DAY' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                                                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
+                                                        : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
                                                         }`}
                                                 >
                                                     {type.replace('_', ' ')}
