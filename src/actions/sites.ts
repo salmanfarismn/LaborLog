@@ -23,8 +23,13 @@ export async function getSites(activeOnly: boolean = false) {
             sites.map(async site => {
                 const laborCount = await Labor.countDocuments({ defaultSiteId: site._id })
                 return {
-                    ...site,
                     id: site._id.toString(),
+                    name: site.name,
+                    address: site.address || null,
+                    description: site.description || null,
+                    isActive: site.isActive,
+                    createdAt: site.createdAt,
+                    updatedAt: site.updatedAt,
                     _count: {
                         labors: laborCount,
                     },

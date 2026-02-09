@@ -10,6 +10,7 @@ import {
     Calendar,
     Wallet,
     BookOpen,
+    FileSpreadsheet,
     Menu,
     X,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ const navItems = [
     { href: '/attendance', label: 'Attendance', icon: Calendar },
     { href: '/payments', label: 'Payments', icon: Wallet },
     { href: '/ledger', label: 'Ledger', icon: BookOpen },
+    { href: '/reports', label: 'Reports', icon: FileSpreadsheet },
 ]
 
 export function Sidebar() {

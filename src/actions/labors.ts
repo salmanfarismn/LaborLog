@@ -72,14 +72,24 @@ export async function getLabors(status?: string) {
             .sort({ createdAt: -1 })
             .lean() as LaborLeanResult[]
 
-        // Transform to match expected format
+        // Transform to match expected format - explicitly serialize all fields
         const transformedLabors = labors.map(labor => ({
-            ...labor,
             id: labor._id.toString(),
+            fullName: labor.fullName,
+            phone: labor.phone || null,
+            role: labor.role || null,
             defaultSiteId: labor.defaultSiteId?.toString() || null,
+            monthlySalary: labor.monthlySalary,
+            joiningDate: labor.joiningDate,
+            status: labor.status,
+            createdAt: labor.createdAt,
+            updatedAt: labor.updatedAt,
             defaultSite: labor.defaultSite ? {
-                ...labor.defaultSite,
-                id: (labor.defaultSite as { _id: { toString(): string } })._id.toString(),
+                id: labor.defaultSite._id.toString(),
+                name: labor.defaultSite.name,
+                address: labor.defaultSite.address || null,
+                description: labor.defaultSite.description || null,
+                isActive: labor.defaultSite.isActive,
             } : null,
         }))
 
@@ -225,15 +235,25 @@ export async function deleteLabor(id: string) {
     try {
         await connectDB()
 
-        // Note: When Attendance and Payment models are migrated,
-        // cascade delete behavior will be handled there
-        const result = await Labor.findByIdAndDelete(id)
-
-        if (!result) {
+        // Check if labor exists first
+        const labor = await Labor.findById(id)
+        if (!labor) {
             return { success: false, error: 'Labor not found' }
         }
 
+        // Cascade delete: Remove all associated attendance and payment records
+        await Promise.all([
+            Attendance.deleteMany({ laborId: id }),
+            Payment.deleteMany({ laborId: id }),
+        ])
+
+        // Now delete the labor
+        await Labor.findByIdAndDelete(id)
+
         revalidatePath('/labors')
+        revalidatePath('/attendance')
+        revalidatePath('/payments')
+        revalidatePath('/ledger')
         revalidatePath('/')
 
         return { success: true }
