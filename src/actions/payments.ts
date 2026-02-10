@@ -2,6 +2,7 @@
 
 import connectDB from '@/lib/mongodb'
 import Payment from '@/models/Payment'
+import '@/models/Labor' // Required: registers Labor model for populate('labor')
 import { revalidatePath } from 'next/cache'
 import type { PaymentFormData } from '@/types'
 import mongoose from 'mongoose'

@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb'
 import Labor from '@/models/Labor'
 import Attendance from '@/models/Attendance'
 import Payment from '@/models/Payment'
+import '@/models/WorkSite' // Required: registers WorkSite model for populate('defaultSite')
 import { revalidatePath } from 'next/cache'
 import type { LaborFormData } from '@/types'
 import mongoose from 'mongoose'

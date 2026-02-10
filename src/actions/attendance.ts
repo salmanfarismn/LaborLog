@@ -3,6 +3,7 @@
 import connectDB from '@/lib/mongodb'
 import Attendance from '@/models/Attendance'
 import Labor from '@/models/Labor'
+import '@/models/WorkSite' // Required: registers WorkSite model for populate('site')
 import { revalidatePath } from 'next/cache'
 import type { AttendanceFormData } from '@/types'
 import mongoose from 'mongoose'
